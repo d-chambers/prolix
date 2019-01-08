@@ -1,0 +1,5 @@
+PyDictionary
+autocorrect
+colorama
+click
+urwid
