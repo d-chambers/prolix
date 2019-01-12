@@ -6,6 +6,4 @@ import prolix.cli
 
 # shortcut imports
 from prolix.store import read_words, add_words
-from prolix.core import WordQuiz
-
-
+from prolix.core import WordQuiz, QuizRun, Card, CardRun

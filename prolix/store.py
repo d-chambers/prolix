@@ -97,6 +97,8 @@ def read_words():
     else:
         # remove unnamed columns
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')].set_index('word')
+        # remove words with no definitions
+        df = df[~df.definition.isnull()]
     assert set(df.columns) == set(word_columns)
     # add df to cache
     _word_cache['df'] = df.sort_index()

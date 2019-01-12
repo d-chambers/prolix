@@ -252,6 +252,7 @@ lurid,"{'Adjective': ['horrible in fierceness or savagery', 'glaringly vivid and
 maelstrom,{'Noun': ['a powerful circular current of water (usually the result of conflicting tides']}
 magnate,{'Noun': ['a very wealthy or powerful businessman']}
 malaise,{'Noun': ['physical discomfort (as mild sickness or depression']}
+malapropism,{'Noun': ['the unintentional misuse of a word by confusion with one that sounds similar']}
 malign,"{'Verb': ['speak unfavorably about'], 'Adjective': ['evil or harmful in nature or influence', 'having or exerting a malignant influence']}"
 mar,"{'Noun': ['the month following February and preceding April', ""a mark or flaw that spoils the appearance of something (especially on a person's body""], 'Verb': ['make imperfect', 'destroy or injure severely']}"
 maudlin,{'Adjective': ['effusively or insincerely emotional']}
@@ -417,4 +418,4 @@ wry,"{'Adjective': ['humorously sarcastic or mocking', 'bent to one side']}"
 xenophobia,{'Noun': ['a fear of foreigners or strangers']}
 yoke,"{'Noun': ['fabric comprising a fitted part at the top of a garment', 'an oppressive power', 'two items of the same kind', 'a pair of draft animals joined by a yoke', 'support consisting of a wooden frame across the shoulders that enables a person to carry buckets hanging from each end', 'a connection (like a clamp or vise', 'stable gear that joins two draft animals at the neck so they can work together as a team'], 'Verb': ['become joined or linked together', 'link with or as with a yoke', 'put a yoke on or join with a yoke']}"
 zeal,"{'Noun': ['a feeling of strong eagerness (usually in favor of a person or cause', 'excessive fervor to do something or accomplish some end', 'prompt willingness']}"
-malapropism,{'Noun': ['the unintentional misuse of a word by confusion with one that sounds similar']}
+pracis,
