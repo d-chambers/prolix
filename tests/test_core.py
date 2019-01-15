@@ -108,6 +108,17 @@ class TestQuizRun:
         assert quiz_run._has_exited
 
 
+class TestCard:
+    def test_flip(self):
+        """ make sure the text changes when the card is flipped. """
+        card = prolix.Card()
+        text = card.displayed_text
+        card.flip()
+        assert text != card.displayed_text
+        card.flip()
+        assert text == card.displayed_text
+
+
 class TestCardRun:
     """ tests for running through the cards. """
 

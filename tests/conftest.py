@@ -2,9 +2,13 @@
 Tests configuration
 """
 import sys
+import string
+import random
 from pathlib import Path
 
 import pytest
+
+import prolix
 
 # path to the test directory
 TEST_PATH = Path(__file__).parent
@@ -16,10 +20,14 @@ PKG_PATH = TEST_PATH.parent
 sys.path.insert(0, str(PKG_PATH))
 
 
-def pytest_namespace():
-    """ add the expected files to the py.test namespace """
-    odict = {
-        "test_path": TEST_PATH,
-        "package_path": PKG_PATH,
-    }
-    return odict
+@pytest.fixture
+def user():
+    """ Create a test user profile, delete when finished. """
+    name = ''.join([random.choice(string.ascii_lowercase) for x in range(5)])
+    prolix.create_user(name)
+    yield name
+    prolix.delete_user(name)
+
+
+
+

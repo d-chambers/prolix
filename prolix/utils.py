@@ -4,8 +4,9 @@ Utilities
 
 import ast
 from functools import reduce
-from typing import Optional
 from operator import add
+from typing import Optional
+from typing import Sequence
 
 
 def _dedict_definition(word_def: str):
@@ -14,7 +15,7 @@ def _dedict_definition(word_def: str):
     return reduce(add, list(word_def.values()))
 
 
-def _format_defintion(definition, number: Optional[int]=None):
+def _format_defintion(definition, number: Optional[int] = None):
     """ Format a definition for nice viewing. """
     fdefs = _dedict_definition(definition)
     joined = ':\n'.join(fdefs)
@@ -25,6 +26,7 @@ def _format_defintion(definition, number: Optional[int]=None):
 
 class FakeLoop:
     """ Fake urwid loop for debugging without screwing up stdout. """
+
     def __init__(self, *args, **kwargs):
         pass
 
@@ -33,3 +35,16 @@ class FakeLoop:
 
     def draw_screen(self, *args, **kwargs):
         pass
+
+
+def iterate(obj):
+    """
+    Return an iterable from any object.
+
+    If string, do not iterate characters, return str in tuple .
+    """
+    if obj is None:
+        return ()
+    if isinstance(obj, str):
+        return (obj,)
+    return obj if isinstance(obj, Sequence) else (obj,)

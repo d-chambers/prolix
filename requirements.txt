@@ -1,5 +1,5 @@
 PyDictionary
 autocorrect
-colorama
 click
 urwid
+peewee
