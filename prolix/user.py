@@ -1,7 +1,9 @@
 """
-Module for accessing user info.
+User Module and database stuff.
 """
 from contextlib import suppress
+from functools import wraps
+from pathlib import Path
 from typing import Optional, Set
 
 import pandas as pd
@@ -42,15 +44,14 @@ def _delete_table(table: peewee.Model):
 # --- Tables and table factories
 
 
-class MetaProlix(peewee.Model):
-    """ A metatable that keeps track of version, current user, etc. """
-    current_user = peewee.CharField()
-    version = peewee.CharField()
+class ProlixUsers(peewee.Model):
+    """ A table for storing the names of prolix users. """
+    user = peewee.CharField()
     Meta = Meta
 
 
-# create the meta table
-_create_table(MetaProlix)
+# create the meta/user table
+_create_table(ProlixUsers)
 
 
 def _get_rejected_table(user) -> peewee.Model:
@@ -62,14 +63,18 @@ def _get_rejected_table(user) -> peewee.Model:
 
 def _get_quiz_table(user) -> peewee.Model:
     """ Create a table for how often user gets certain words correct. """
-    contents = {'word': peewee.CharField(), 'right': peewee.IntegerField(),
-                'wrong': peewee.IntegerField(), 'Meta': Meta}
+    contents = {
+        'word': peewee.CharField(),
+        'right': peewee.IntegerField(default=0),
+        'wrong': peewee.IntegerField(default=0),
+        'Meta': Meta,
+    }
     cls = type(f'quiz_{user}', (peewee.Model,), contents)
 
     return cls
 
 
-def create_user(user: str, set_default: bool = True):
+def _add_user_to_db(user: str, set_current: bool = True):
     """
     Add a user to the database.
 
@@ -77,7 +82,7 @@ def create_user(user: str, set_default: bool = True):
     ----------
     user
         A string identifying the user.
-    set_default
+    set_current
         If True set the user to default user.
     """
     if user is None:
@@ -86,59 +91,45 @@ def create_user(user: str, set_default: bool = True):
         reject_table = _create_table(_get_rejected_table(user))
         quiz_table = _create_table(_get_quiz_table(user))
         _USER_CACHE[user] = (reject_table, quiz_table)
-    if set_default:
-        result = (
-            MetaProlix
-                .insert(id=1, current_user=user, version=prolix.__version__)
-                .on_conflict('replace').execute()
-        )
-        assert result
+    if set_current:
+        _set_current_user(user)
     return user
 
 
-def delete_user(user):
-    """ Delete a user from the database. """
-    # pull name out of cache and delete tables
-    tables = _USER_CACHE.pop(user, [])
-    for table in tables:
-        _delete_table(table)
-    # delete set user if needed
-    with suppress(peewee.OperationalError, peewee.DoesNotExist):
-        MetaProlix.get(current_user=user).delete_instance()
-
-
-def _get_default_user() -> Optional[str]:
-    """ return the default user name or None if none is specified. """
+def _get_current_user_name() -> Optional[str]:
+    """ Get the current user, return None if one is not set. """
+    path = Path(prolix.user_file_path)
     try:
-        return MetaProlix.get_by_id(1).current_user
-    except peewee.DoesNotExist:
-        return
+        with path.open('r') as fi:
+            return fi.read().rstrip() or None
+    except FileNotFoundError:
+        return None
 
 
-def get_discarded_words(user=None) -> Set[str]:
-    """ Return a set of discarded flashcard words. """
-    user = create_user(user or _get_default_user(), set_default=False)
-    if user:
-        table = _USER_CACHE[user][0]
-        words = {x.word for x in table.select(table.word)}
-        return words
-    return set()
+def _set_current_user(user: Optional[str] = None):
+    """
+    Set the current user. If None delete current user.
 
-
-def discard_word(word, user=None):
-    """ Discard a word so that the flash card is not shown again. """
-    user = create_user(user or _get_default_user(), set_default=False)
-    if user:
-        table = _USER_CACHE[user][0]
-        data = [{'word': x} for x in iterate(word)]
-        table.insert_many(data).execute()
+    Parameters
+    ----------
+    user
+        The name of the user
+    """
+    path = Path(prolix.user_file_path)
+    # if user is None delete
+    if user is None:
+        with suppress(FileNotFoundError):
+            path.unlink()
+    else:
+        with path.open('w') as fi:
+            fi.write(user)
 
 
 def _increment_word_count(words, field, user=None):
     """ increment the word count for correct or incorrect. """
     assert field in {'right', 'wrong'}
     # get the user and tables
-    user = create_user(user or _get_default_user())
+    user = _add_user_to_db(user or _get_current_user_name())
     if user is None:
         return
     table = _USER_CACHE[user][1]
@@ -148,67 +139,111 @@ def _increment_word_count(words, field, user=None):
             row = table.get(word=word)
         except peewee.DoesNotExist:
             data = {'word': word, field: 1}
-            row = table.create(**data).execute()
+            table.create(**data)
         else:
             current_value = getattr(row, field, 0)
             setattr(row, field, current_value + 1)
 
 
-def _correctly_answered_word(word, user=None):
+def _require_user(method):
     """
-    Increment the correct count for the word of user.
-
-    Parameters
-    ----------
-    word
-        The word that was answered.
-    user
-        The user who answered. If None use default user.
+    Method decorator to require a user. If user is None don't call method.
+    Also ensure the user has been created.
     """
-    _increment_word_count(word, 'right', user=user)
+
+    @wraps(method)
+    def _wrap(self, *args, **kwargs):
+        if self.name is not None:
+            _add_user_to_db(self.name, self.is_current_user)
+            return method(self, *args, **kwargs)
+
+    return _wrap
 
 
-def _incorrectly_answered_word(word, user=None):
-    """
-    Increment the incorrect count for the word of user.
+class User:
+    """ A prolix user model. """
 
-    Parameters
-    ----------
-    word
-        The word that was answered.
-    user
-        The user who answered. If None use default user.
-    """
-    _increment_word_count(word, 'wrong', user=user)
+    def __init__(self, name: Optional[str] = None,
+                 is_current_user: bool = False):
+        self.name = name or _get_current_user_name()
+        self.is_current_user = is_current_user
+        # initialzed
+        _add_user_to_db(name)
 
+    @property
+    def is_current_user(self):
+        return _get_current_user_name() == self.name
 
-def _get_user_word_df(user=None):
-    """
-    Return a datafame of word score for the user.
+    @is_current_user.setter
+    def is_current_user(self, is_current: bool):
+        current_user = _get_current_user_name()
+        if is_current and self.name:
+            _set_current_user(self.name)
+        if not is_current:
+            # If the current user is user set it back to None
+            if current_user == self.name:
+                _set_current_user(None)
 
-    The dataframe has the word as the index and "right" and "wrong" columns
-    which are both integer counts of how many times the word quiz was answered
-    correctly or incorrectly, respectively.
+    @_require_user
+    def delete_user(self):
+        """ Delete this user, remove from db and delete current user if one
+         exists. """
+        # pull name out of cache and delete tables
+        tables = _USER_CACHE.pop(self.name, [])
+        for table in tables:
+            _delete_table(table)
+        # delete user from table
+        with suppress(peewee.OperationalError, peewee.DoesNotExist):
+            ProlixUsers.get(user=self.name).delete_instance()
+        # reset current_user file
+        if self.name == _get_current_user_name():
+            _set_current_user(None)
 
-    Parameters
-    ----------
-    user
-        The user to query.
-    """
-    user = create_user(user or _get_default_user())
-    table = _USER_CACHE[user][1]
-    word_df = prolix.read_words()
-    # get the existing databse
-    df = pd.DataFrame(list(table.select().dicts()))
-    if df.empty:
-        df = word_df.copy()
+    @staticmethod
+    def _default_quiz_table() -> pd.DataFrame:
+        """ Return the default quiz table. """
+        df = prolix.read_words().copy()
         df['right'] = 0
         df['wrong'] = 0
         df = df[['right', 'wrong']]
-    else:
-        breakpoint()
+        return df
 
+    @_require_user
+    def get_quiz_df(self) -> pd.DataFrame:
+        """
+        Return a datafame of word score for the user.
 
+        The dataframe has the word as the index and "right" and "wrong" columns
+        which are both integer counts of how many times the word quiz was answered
+        correctly or incorrectly, respectively.
 
-    return df
+        """
+        default = self._default_quiz_table()
+        table = _USER_CACHE[self.name][1]
+        df = pd.DataFrame(list(table.select().dicts()),
+                          columns=['right', 'wrong', 'word'])
+        return default.add(df.set_index('word'), fill_value=0)
 
+    @_require_user
+    def incorrectly_answered_word(self, word):
+        """ User answered word incorrectly. """
+        _increment_word_count(word, 'wrong', user=self.name)
+
+    @_require_user
+    def correctly_answered_word(self, word):
+        """ User answered word correctly. """
+        _increment_word_count(word, 'right', user=self.name)
+
+    @_require_user
+    def get_discarded_words(self) -> Set[str]:
+        """ Return a set of discarded flashcard words for user. """
+        table = _USER_CACHE[self.name][0]
+        words = {x.word for x in table.select(table.word)}
+        return words
+
+    @_require_user
+    def discard_word(self, word):
+        """ Discard a word so that the flash card is not shown again. """
+        table = _USER_CACHE[self.name][0]
+        data = [{'word': x} for x in iterate(word)]
+        table.insert_many(data).execute()

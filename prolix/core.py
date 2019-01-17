@@ -17,6 +17,7 @@ from prolix.utils import FakeLoop, _format_defintion
 
 _letter_num_map = {let: num for num, let in enumerate(ascii_lowercase)}
 _number_strings = {str(x) for x in range(10)}
+_quiz_on = ('word', 'definition')
 
 
 class ProlixUrWid:
@@ -56,7 +57,7 @@ class ProlixUrWid:
     def _header(self):
         """ Return header text block """
         name_block = f"{self._name or ''}"
-        user_block = "" if self._user is None else f": {self._user}"
+        user_block = self._user.name or ""
         text = urwid.Text(name_block + user_block, align='center')
         return urwid.AttrMap(text, 'header_block')
 
@@ -263,13 +264,14 @@ class QuizRun(ProlixUrWid):
 
     def __init__(self, question_count=15, user=None, choice_count=4, quiz_on='word'):
         self._remaining_questions = question_count
-        self._user = user
+        self._user = prolix.User(user)
         self._buttons = []
         assert quiz_on in {'word', 'definition'}
         self._quiz_on = quiz_on
         self._def_count = choice_count
         self._get_new_quiz()
         self._create_display()
+        self._quiz_on_cycle = cycle(_quiz_on)
 
         # map indices of buttons in the simple list walker
         self._button_index = tuple(range(3, choice_count * 2 + 2, 2))
@@ -320,11 +322,16 @@ class QuizRun(ProlixUrWid):
             self._main = urwid.Padding(list_box, left=2, right=2)
         else:
             self._main.original_widget = list_box
+
         overlay = urwid.Overlay(self._main, urwid.SolidFill(u'\N{MEDIUM SHADE}'),
                                 align='center', width=('relative', 90),
                                 valign='middle', height=('relative', 60),
                                 min_width=40, min_height=20)
-        self._overlay = overlay
+
+        frame = urwid.Frame(header=self._header, body=overlay,
+                            footer=self._get_footer())
+
+        self._overlay = frame
 
     def item_chosen(self, button, choice):
         """
@@ -335,9 +342,12 @@ class QuizRun(ProlixUrWid):
         is_correct = self.quiz.answer(choice, quiz_on=self._quiz_on)
 
         if is_correct:
+            if self._answered_correctly:
+                self._user.correctly_answered_word(self.quiz.word)
             self._get_new_quiz()
         else:
             self._answered_correctly = False
+            self._user.incorrectly_answered_word(self.quiz.word)
         if self._remaining_questions < 1:
             self.exit_program()
         self._create_display()
@@ -369,6 +379,15 @@ class QuizRun(ProlixUrWid):
                 self._buttons[val]._emit('click')
             else:  # else just select it
                 self._list_walker.set_focus(focus_val)
+        elif key == 'f':  # flip mode for next card
+            current = self._quiz_on
+            self._quiz_on = next(self._quiz_on_cycle)
+            if self._quiz_on == current:
+                self._quiz_on = next(self._quiz_on_cycle)
+
+    def _get_footer(self):
+        txt = 'q: quit; f: flip mode on next card; arrows or numbers select answer'
+        return urwid.Text(txt)
 
 
 # -------------------- Flash card stuff

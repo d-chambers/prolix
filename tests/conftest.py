@@ -21,13 +21,12 @@ sys.path.insert(0, str(PKG_PATH))
 
 
 @pytest.fixture
-def user():
+def user() -> prolix.User:
     """ Create a test user profile, delete when finished. """
-    name = ''.join([random.choice(string.ascii_lowercase) for x in range(5)])
-    prolix.create_user(name)
-    yield name
-    prolix.delete_user(name)
-
-
-
-
+    name = ''.join([random.choice(string.ascii_lowercase) for _ in range(5)])
+    current_user = prolix.User()
+    user = prolix.User(name, is_current_user=True)
+    yield user
+    # delete test user and set current user back
+    user.delete_user()
+    current_user.is_current_user = True
